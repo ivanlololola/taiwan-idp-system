@@ -1,0 +1,26 @@
+{
+  "亞洲地區": {
+    "日本 (Japan)": {"car": true, "moto": true, "limit_days": 365, "note": "必備「日文譯本」及原照。"},
+    "韓國 (South Korea)": {"car": true, "moto": true, "limit_days": 365, "note": "國際駕照互惠。"},
+    "泰國 (Thailand)": {"car": true, "moto": true, "limit_days": 365, "note": ""},
+    "新加坡 (Singapore)": {"car": true, "moto": false, "limit_days": 365, "note": "機車不具互惠。"},
+    "馬來西亞 (Malaysia)": {"car": true, "moto": true, "limit_days": 90, "note": "超過90天需換照。"},
+    "菲律賓 (Philippines)": {"car": true, "moto": true, "limit_days": 365, "note": ""},
+    "越南 (Vietnam)": {"car": false, "moto": false, "limit_days": 0, "note": "目前尚無駕照互惠。"}
+  },
+  "北美洲 (州/省)": {
+    "美國-加州 (California)": {"car": true, "moto": false, "limit_days": 365, "note": ""},
+    "美國-紐約州 (New York)": {"car": true, "moto": false, "limit_days": 365, "note": ""},
+    "美國-德州 (Texas)": {"car": true, "moto": false, "limit_days": 365, "note": ""},
+    "美國-華盛頓州 (Washington)": {"car": true, "moto": true, "limit_days": 365, "note": ""},
+    "加拿大-安大略省 (Ontario)": {"car": true, "moto": true, "limit_days": 365, "note": ""},
+    "加拿大-卑詩省 (BC)": {"car": true, "moto": true, "limit_days": 365, "note": ""}
+  },
+  "歐洲/大洋洲": {
+    "英國 (UK)": {"car": true, "moto": true, "limit_days": 365, "note": ""},
+    "法國 (France)": {"car": true, "moto": true, "limit_days": 365, "note": ""},
+    "德國 (Germany)": {"car": true, "moto": true, "limit_days": 365, "note": ""},
+    "澳洲 (Australia)": {"car": true, "moto": true, "limit_days": 365, "note": ""},
+    "紐西蘭 (New Zealand)": {"car": true, "moto": true, "limit_days": 365, "note": ""}
+  }
+}
