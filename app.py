@@ -24,6 +24,7 @@ else:
     st.sidebar.success(f"成功定位資料夾：{target_folder}")
 
 # --- 2. 核心解析引擎 (修改後的自動掃描) ---
+
 @st.cache_data
 def load_all_pdfs(path):
     all_data = []
@@ -31,23 +32,72 @@ def load_all_pdfs(path):
         return pd.DataFrame()
         
     files = [f for f in os.listdir(path) if f.endswith('.pdf')]
-    st.sidebar.write(f"偵測到 PDF 檔案：{files}")
     
     for file in files:
         full_path = os.path.join(path, file)
+        region_name = file.replace(".pdf", "")
+        
         try:
             with pdfplumber.open(full_path) as pdf:
-                # ... (後續解析邏輯維持不變) ...
-                # 確保這裡的解析邏輯能正確執行
                 for page in pdf.pages:
-                    table = page.extract_table()
-                    if table:
-                        # 這裡放我們之前的解析代碼
-                        pass 
+                    # 使用 table_settings 強制偵測表格線條
+                    # 解決政府 PDF 線條不明顯的問題
+                    settings = {
+                        "vertical_strategy": "lines", 
+                        "horizontal_strategy": "lines",
+                        "snap_tolerance": 3,
+                    }
+                    table = page.extract_table(table_settings=settings)
+                    
+                    # 如果抓不到線條，改用文字對齊模式 (備援機制)
+                    if not table:
+                        table = page.extract_table(table_settings={"vertical_strategy": "text", "horizontal_strategy": "text"})
+                    
+                    if table and len(table) > 1:
+                        # 找到標題列索引
+                        headers = [str(h).replace("\n", "") if h else "" for h in table[0]]
+                        col_map = {"country": -1, "car": -1, "moto": -1, "note": -1}
+                        
+                        for i, h in enumerate(headers):
+                            if "國家" in h: col_map["country"] = i
+                            elif "汽" in h: col_map["car"] = i
+                            elif "機" in h or "摩" in h: col_map["moto"] = i
+                            elif "備註" in h or "說明" in h: col_map["note"] = i
+                        
+                        # 解析內容
+                        for row in table[1:]:
+                            # 確保國家欄位有資料，且該行不是空行
+                            if col_map["country"] != -1 and len(row) > col_map["country"] and row[col_map["country"]]:
+                                country = str(row[col_map["country"]]).replace("\n", "").strip()
+                                # 排除標題重複出現的情況
+                                if country == "國家名稱" or "Country" in country: continue
+                                
+                                note = str(row[col_map["note"]]).replace("\n", " ") if col_map["note"] != -1 and row[col_map["note"]] else "無特殊備註"
+                                
+                                # 關鍵字掃描器 (自動判定天數與機車)
+                                scan_days = 365
+                                if "90" in note: scan_days = 90
+                                elif "180" in note: scan_days = 180
+                                
+                                # 判定機車 (檢查欄位字眼或備註關鍵字)
+                                moto_val = str(row[col_map["moto"]]) if col_map["moto"] != -1 else ""
+                                scan_moto = True
+                                if "無" in moto_val or "不" in moto_val or ("不" in note and "機車" in note):
+                                    scan_moto = False
+                                
+                                all_data.append({
+                                    "區域": region_name,
+                                    "國家": country,
+                                    "汽車": "可" if "可" in str(row[col_map["car"]]) else "查閱備註",
+                                    "機車": "可" if scan_moto else "無互惠",
+                                    "自動判定天數": scan_days,
+                                    "原始備註": note
+                                })
         except Exception as e:
-            st.sidebar.error(f"讀取 {file} 出錯: {e}")
+            st.error(f"解析 {file} 時發生錯誤: {e}")
             
-    return pd.DataFrame(all_data) # 這裡回傳你解析後的結果
+    return pd.DataFrame(all_data)
+
 
 # --- 2. 介面設定 ---
 st.set_page_config(page_title="國際駕照法規查驗系統", layout="wide")
