@@ -28,74 +28,85 @@ else:
 @st.cache_data
 def load_all_pdfs(path):
     all_data = []
-    if not os.path.exists(path):
-        return pd.DataFrame()
-        
+    if not os.path.exists(path): return pd.DataFrame()
+    
     files = [f for f in os.listdir(path) if f.endswith('.pdf')]
     
     for file in files:
         full_path = os.path.join(path, file)
         region_name = file.replace(".pdf", "")
         
-        try:
-            with pdfplumber.open(full_path) as pdf:
-                for page in pdf.pages:
-                    # 使用 table_settings 強制偵測表格線條
-                    # 解決政府 PDF 線條不明顯的問題
-                    settings = {
-                        "vertical_strategy": "lines", 
-                        "horizontal_strategy": "lines",
-                        "snap_tolerance": 3,
-                    }
-                    table = page.extract_table(table_settings=settings)
+        with pdfplumber.open(full_path) as pdf:
+            for page in pdf.pages:
+                # 關鍵設定：消除文字間的細微間距，避免文字斷裂
+                table = page.extract_table({
+                    "vertical_strategy": "lines",
+                    "horizontal_strategy": "lines",
+                    "intersection_y_tolerance": 10
+                })
+                
+                if not table: continue
+
+                # 從表格中尋找「國別」與「我國對外國」的欄位索引
+                # 根據照片，國別在 index 0
+                # 我國對外國使用情形通常在 index 4 左右
+                col_country = 0
+                col_usage = -1
+                col_note = -1
+
+                # 自動搜尋標題行（通常在第 2 或 第 3 行）
+                for row_idx in range(len(table)):
+                    row_str = "".join([str(cell) for cell in table[row_idx] if cell])
+                    if "我國對外國" in row_str or "在當地使用" in row_str:
+                        # 找到右半部的起點
+                        for i, cell in enumerate(table[row_idx]):
+                            if cell and "在當地使用" in cell and i > 2:
+                                col_usage = i
+                            if cell and "備註" in cell and i > col_usage:
+                                col_note = i
+                        break
+                
+                # 若自動偵測失敗，使用固定座標（針對您照片中的格式）
+                if col_usage == -1: col_usage = 4
+                if col_note == -1: col_note = 6
+
+                for row in table[row_idx+1:]:
+                    if not row[col_country]: continue
                     
-                    # 如果抓不到線條，改用文字對齊模式 (備援機制)
-                    if not table:
-                        table = page.extract_table(table_settings={"vertical_strategy": "text", "horizontal_strategy": "text"})
+                    country = str(row[col_country]).replace("\n", "").strip()
+                    # 過濾非國家行
+                    if any(x in country for x in ["國別", "地區", "合計"]): continue
                     
-                    if table and len(table) > 1:
-                        # 找到標題列索引
-                        headers = [str(h).replace("\n", "") if h else "" for h in table[0]]
-                        col_map = {"country": -1, "car": -1, "moto": -1, "note": -1}
-                        
-                        for i, h in enumerate(headers):
-                            if "國家" in h: col_map["country"] = i
-                            elif "汽" in h: col_map["car"] = i
-                            elif "機" in h or "摩" in h: col_map["moto"] = i
-                            elif "備註" in h or "說明" in h: col_map["note"] = i
-                        
-                        # 解析內容
-                        for row in table[1:]:
-                            # 確保國家欄位有資料，且該行不是空行
-                            if col_map["country"] != -1 and len(row) > col_map["country"] and row[col_map["country"]]:
-                                country = str(row[col_map["country"]]).replace("\n", "").strip()
-                                # 排除標題重複出現的情況
-                                if country == "國家名稱" or "Country" in country: continue
-                                
-                                note = str(row[col_map["note"]]).replace("\n", " ") if col_map["note"] != -1 and row[col_map["note"]] else "無特殊備註"
-                                
-                                # 關鍵字掃描器 (自動判定天數與機車)
-                                scan_days = 365
-                                if "90" in note: scan_days = 90
-                                elif "180" in note: scan_days = 180
-                                
-                                # 判定機車 (檢查欄位字眼或備註關鍵字)
-                                moto_val = str(row[col_map["moto"]]) if col_map["moto"] != -1 else ""
-                                scan_moto = True
-                                if "無" in moto_val or "不" in moto_val or ("不" in note and "機車" in note):
-                                    scan_moto = False
-                                
-                                all_data.append({
-                                    "區域": region_name,
-                                    "國家": country,
-                                    "汽車": "可" if "可" in str(row[col_map["car"]]) else "查閱備註",
-                                    "機車": "可" if scan_moto else "無互惠",
-                                    "自動判定天數": scan_days,
-                                    "原始備註": note
-                                })
-        except Exception as e:
-            st.error(f"解析 {file} 時發生錯誤: {e}")
-            
+                    usage_text = str(row[col_usage]).replace("\n", " ") if len(row) > col_usage else ""
+                    note_text = str(row[col_note]).replace("\n", " ") if len(row) > col_note else ""
+                    
+                    full_legal_text = usage_text + " " + note_text
+                    
+                    # --- 關鍵字掃描器 ---
+                    # 1. 天數判定
+                    scan_days = 365
+                    if "90" in full_legal_text: scan_days = 90
+                    elif "180" in full_legal_text: scan_days = 180
+                    elif "否" in usage_text and "不" in usage_text: scan_days = 0 # 不具互惠
+                    
+                    # 2. 機車判定 (檢查是否提到機車或摩托車)
+                    scan_moto = True
+                    if "機車" in full_legal_text or "摩托車" in full_legal_text:
+                        if "不" in full_legal_text or "否" in full_legal_text or "無" in full_legal_text:
+                            scan_moto = False
+                    
+                    # 針對照片中「千里達」的案例：自動抓取 90 天
+                    if "90" in usage_text: scan_days = 90
+
+                    all_data.append({
+                        "區域": region_name,
+                        "國家": country,
+                        "汽車": "可" if scan_days > 0 else "無互惠",
+                        "機車": "可" if scan_moto else "無互惠",
+                        "自動判定天數": scan_days,
+                        "原始法規內容": full_legal_text
+                    })
+                    
     return pd.DataFrame(all_data)
 
 
