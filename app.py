@@ -43,7 +43,7 @@ def analyze_with_gemini(api_key, country, context):
         genai.configure(api_key=api_key)
         
         # 優先嘗試 1.5 Flash
-        model_name = 'gemini-1.5-flash'
+        model_name = 'models/gemini-1.5-flash'
         model = genai.GenerativeModel(model_name)
         
         # 這裡建議加入一個回應測試，或直接執行
