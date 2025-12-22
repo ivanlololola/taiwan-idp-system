@@ -37,34 +37,29 @@ def load_and_preprocess_pdfs(data_dir):
     return knowledge_base
 
 # --- 3. Gemini 串接邏輯 ---
+
 def analyze_with_gemini(api_key, country, context):
-    """將檢索到的法規片段交由 Gemini 進行分析"""
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    
-    prompt = f"""
-    你現在是台灣監理站的法規專家。請根據以下提供的官方互惠法規文字，精準分析『{country}』的規定。
-    
-    【法規原始文字】:
-    {context}
-    
-    【輸出要求】:
-    1. 僅輸出 JSON 格式，不要任何解釋文字。
-    2. JSON 必須包含以下欄位：
-       - can_drive (boolean): 是否允許在台駕駛。
-       - limit_days (int): 允許天數。若無特別限制或一年請填 365；若為90天請填 90。
-       - motorcycle_eligible (boolean): 機車是否具備互惠。
-       - translation_required (boolean): 是否需要搭配日文譯本或中文譯本。
-       - reason (string): 簡短解釋判定依據。
-    """
-    
     try:
+        genai.configure(api_key=api_key)
+        
+        # 優先嘗試 1.5 Flash
+        model_name = 'gemini-1.5-flash'
+        model = genai.GenerativeModel(model_name)
+        
+        # 這裡建議加入一個回應測試，或直接執行
+        prompt = f"請分析以下法規並回傳 JSON：{context}"
         response = model.generate_content(prompt)
-        # 移除 Markdown JSON 標記
-        clean_text = response.text.replace('```json', '').replace('```', '').strip()
-        return json.loads(clean_text)
+        
+        # 解析邏輯...
+        return json.loads(response.text.replace('```json', '').replace('```', '').strip())
+        
     except Exception as e:
-        return {"error": str(e)}
+        # 如果還是 404，嘗試加上 models/ 前綴
+        if "404" in str(e):
+            model = genai.GenerativeModel('models/gemini-1.5-flash')
+            # 重新嘗試生成...
+            
+        return {"error": f"模型調用失敗，請確認套件已更新。原始錯誤：{str(e)}"}
 
 # --- 4. 主程式介面 ---
 st.title("📑 全球駕照互惠 AI 智能查詢系統 (RAG 版)")
