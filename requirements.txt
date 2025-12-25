@@ -1,3 +1,5 @@
-streamlit
-google-generativeai>=0.7.2
-pdfplumber
+streamlit>=1.28.0
+pdfplumber>=0.10.0
+openai>=1.0.0
+google-generativeai>=0.3.0
+anthropic>=0.7.0
